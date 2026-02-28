@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     const result = await fetch("https://api.github.com/graphql", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.GITHUB_TOKEN}$`,
+       Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
