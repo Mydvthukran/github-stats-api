@@ -5,92 +5,125 @@ export default async function handler(req, res) {
   const { username } = req.query;
 
   if (!username) {
-    return res.status(400).json({ error: "Username not provided" });
+    return res.status(400).json({ error: "Username required" });
   }
 
-  const headers = {
-    Authorization: `token ${process.env.GITHUB_TOKEN}`,
-  };
+  const query = `
+  query($login:String!) {
+    user(login:$login) {
+
+      name
+      avatarUrl
+      followers { totalCount }
+      following { totalCount }
+
+      repositories(first:100, ownerAffiliations: OWNER) {
+        totalCount
+        nodes {
+          stargazerCount
+          forkCount
+          languages(first:1) {
+            nodes { name }
+          }
+        }
+      }
+
+      contributionsCollection {
+        totalCommitContributions
+        totalPullRequestContributions
+        totalIssueContributions
+        contributionCalendar {
+          totalContributions
+        }
+      }
+    }
+  }`;
 
   try {
 
-    // 🔵 USER BASIC DATA
-    const userRes = await fetch(
-      `https://api.github.com/users/${username}`,
-      { headers }
-    );
+    const result = await fetch("https://api.github.com/graphql", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query,
+        variables: { login: username }
+      })
+    });
 
-    const user = await userRes.json();
+    const json = await result.json();
+    const user = json.data.user;
 
+    let stars = 0;
+    let forks = 0;
+    let langs = {};
 
-    // 🔵 FETCH ALL REPOS
-    const reposRes = await fetch(
-      `https://api.github.com/users/${username}/repos?per_page=100`,
-      { headers }
-    );
+    user.repositories.nodes.forEach(repo => {
 
-    const repos = await reposRes.json();
+      stars += repo.stargazerCount;
+      forks += repo.forkCount;
 
-
-    // 🔵 CALCULATIONS
-    let totalStars = 0;
-    let totalForks = 0;
-    let languages = {};
-
-    repos.forEach(repo => {
-
-      totalStars += repo.stargazers_count;
-      totalForks += repo.forks_count;
-
-      if (repo.language) {
-        languages[repo.language] =
-          (languages[repo.language] || 0) + 1;
-      }
+      const lang = repo.languages.nodes[0]?.name;
+      if (lang) langs[lang] = (langs[lang] || 0) + 1;
 
     });
 
-
-    // 🔵 TOP LANGUAGE
-    const topLang = Object.keys(languages).reduce(
-      (a, b) => languages[a] > languages[b] ? a : b,
+    const topLang = Object.keys(langs).reduce(
+      (a,b)=> langs[a]>langs[b]?a:b,
       "None"
     );
 
-
-    // 🔵 SVG CARD
     const svg = `
-<svg width="420" height="200" xmlns="http://www.w3.org/2000/svg">
+<svg width="450" height="260" xmlns="http://www.w3.org/2000/svg">
 
 <rect width="100%" height="100%" rx="15" fill="#0d1117"/>
 
-<image href="${user.avatar_url}" x="20" y="20" height="60" width="60"/>
+<image href="${user.avatarUrl}" x="20" y="20" height="60" width="60"/>
 
-<text x="100" y="45" fill="#58a6ff" font-size="20" font-family="Arial">
-${user.login}
+<text x="100" y="45" fill="#58a6ff" font-size="20">
+${username}
 </text>
 
-<text x="20" y="100" fill="#c9d1d9" font-size="14">
-Repos: ${repos.length}
+<text x="20" y="110" fill="#c9d1d9">
+Repos: ${user.repositories.totalCount}
 </text>
 
-<text x="20" y="125" fill="#c9d1d9" font-size="14">
-Followers: ${user.followers}
+<text x="20" y="135" fill="#c9d1d9">
+Followers: ${user.followers.totalCount}
 </text>
 
-<text x="20" y="150" fill="#c9d1d9" font-size="14">
-Following: ${user.following}
+<text x="20" y="160" fill="#c9d1d9">
+Following: ${user.following.totalCount}
 </text>
 
-<text x="200" y="100" fill="#c9d1d9" font-size="14">
-Stars: ${totalStars}
+<text x="200" y="110" fill="#c9d1d9">
+Stars: ${stars}
 </text>
 
-<text x="200" y="125" fill="#c9d1d9" font-size="14">
-Forks: ${totalForks}
+<text x="200" y="135" fill="#c9d1d9">
+Forks: ${forks}
 </text>
 
-<text x="200" y="150" fill="#c9d1d9" font-size="14">
+<text x="200" y="160" fill="#c9d1d9">
 Top Lang: ${topLang}
+</text>
+
+<text x="20" y="200" fill="#58a6ff">
+Commits: ${user.contributionsCollection.totalCommitContributions}
+</text>
+
+<text x="200" y="200" fill="#58a6ff">
+PRs: ${user.contributionsCollection.totalPullRequestContributions}
+</text>
+
+<text x="20" y="225" fill="#58a6ff">
+Issues: ${user.contributionsCollection.totalIssueContributions}
+</text>
+
+<text x="200" y="225" fill="#58a6ff">
+Contributions: ${user.contributionsCollection.contributionCalendar.totalContributions}
 </text>
 
 </svg>
@@ -99,7 +132,8 @@ Top Lang: ${topLang}
     res.setHeader("Content-Type", "image/svg+xml");
     res.status(200).send(svg);
 
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch(err) {
+    res.status(500).json({error:err.message});
   }
 }
+    
