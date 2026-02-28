@@ -1,17 +1,39 @@
 export async function renderStats(username, token) {
 
-  const response = await fetch(`https://api.github.com/users/${username}`, {
+  const userRes = await fetch(`https://api.github.com/users/${username}`, {
     headers: {
       Authorization: `token ${token}`
     }
   })
 
-  const data = await response.json()
+  const repoRes = await fetch(`https://api.github.com/users/${username}/repos?per_page=100`, {
+    headers: {
+      Authorization: `token ${token}`
+    }
+  })
 
-  const createdDate = new Date(data.created_at).toDateString()
+  const user = await userRes.json()
+  const repos = await repoRes.json()
+
+  let totalStars = 0
+  let totalForks = 0
+  let languages = {}
+
+  repos.forEach(repo => {
+    totalStars += repo.stargazers_count
+    totalForks += repo.forks_count
+
+    if (repo.language) {
+      languages[repo.language] = (languages[repo.language] || 0) + 1
+    }
+  })
+
+  const topLang = Object.keys(languages).sort((a,b)=>languages[b]-languages[a])[0] || "N/A"
+
+  const createdDate = new Date(user.created_at).toDateString()
 
   return `
-  <svg width="500" height="280" xmlns="http://www.w3.org/2000/svg">
+  <svg width="500" height="320" xmlns="http://www.w3.org/2000/svg">
 
     <style>
       .title { font: bold 22px sans-serif; fill: #58a6ff; }
@@ -21,36 +43,36 @@ export async function renderStats(username, token) {
 
     <rect width="100%" height="100%" fill="#0d1117" rx="15"/>
 
-    <image href="${data.avatar_url}" x="20" y="20" width="80" height="80" rx="40"/>
+    <image href="${user.avatar_url}" x="20" y="20" width="80" height="80" rx="40"/>
 
     <text x="120" y="50" class="title">
-      ${data.login}
+      ${user.login}
     </text>
 
     <text x="120" y="80" class="text">
-      ${data.bio || "No bio available"}
+      ${user.bio || "No bio available"}
     </text>
 
-    <text x="20" y="130" class="label">Public Repos:</text>
-    <text x="160" y="130" class="text">${data.public_repos}</text>
+    <text x="20" y="130" class="label">Repos:</text>
+    <text x="120" y="130" class="text">${user.public_repos}</text>
 
     <text x="20" y="160" class="label">Followers:</text>
-    <text x="160" y="160" class="text">${data.followers}</text>
+    <text x="120" y="160" class="text">${user.followers}</text>
 
-    <text x="20" y="190" class="label">Following:</text>
-    <text x="160" y="190" class="text">${data.following}</text>
+    <text x="20" y="190" class="label">Stars:</text>
+    <text x="120" y="190" class="text">${totalStars}</text>
 
-    <text x="20" y="220" class="label">Location:</text>
-    <text x="160" y="220" class="text">${data.location || "N/A"}</text>
+    <text x="20" y="220" class="label">Forks:</text>
+    <text x="120" y="220" class="text">${totalForks}</text>
 
-    <text x="20" y="250" class="label">Company:</text>
-    <text x="160" y="250" class="text">${data.company || "N/A"}</text>
+    <text x="260" y="130" class="label">Top Lang:</text>
+    <text x="380" y="130" class="text">${topLang}</text>
 
-    <text x="260" y="130" class="label">GitHub ID:</text>
-    <text x="380" y="130" class="text">${data.id}</text>
+    <text x="260" y="160" class="label">Following:</text>
+    <text x="380" y="160" class="text">${user.following}</text>
 
-    <text x="260" y="160" class="label">Created:</text>
-    <text x="380" y="160" class="text">${createdDate}</text>
+    <text x="260" y="190" class="label">Created:</text>
+    <text x="380" y="190" class="text">${createdDate}</text>
 
   </svg>
   `
