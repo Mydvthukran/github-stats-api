@@ -1,47 +1,36 @@
+import fetch from "node-fetch";
+
 export default async function handler(req, res) {
+
   const username = req.query.username;
+
+  if (!username) {
+    return res.status(400).json({ error: "Username required" });
+  }
+
   const token = process.env.PAT_1;
 
-  const headers = {
-    Authorization: `token ${token}`,
-  };
+  if (!token) {
+    return res.status(500).json({ error: "PAT_1 not found" });
+  }
 
-  // USER DATA
-  const user = await fetch(`https://api.github.com/users/${username}`, {
-    headers,
-  }).then((r) => r.json());
+  try {
 
-  // REPO DATA
-  const repos = await fetch(
-    `https://api.github.com/users/${username}/repos?per_page=100`,
-    { headers }
-  ).then((r) => r.json());
+    const response = await fetch(
+      `https://api.github.com/users/${username}`,
+      {
+        headers: {
+          Authorization: `token ${token}`
+        }
+      }
+    );
 
-  let totalStars = 0;
-  let totalForks = 0;
-  let languages = {};
+    const data = await response.json();
 
-  repos.forEach((repo) => {
-    totalStars += repo.stargazers_count;
-    totalForks += repo.forks_count;
+    return res.status(200).json(data);
 
-    if (repo.language) {
-      languages[repo.language] =
-        (languages[repo.language] || 0) + 1;
-    }
-  });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 
-  res.status(200).json({
-    name: user.name,
-    bio: user.bio,
-    followers: user.followers,
-    following: user.following,
-    publicRepos: user.public_repos,
-    publicGists: user.public_gists,
-    stars: totalStars,
-    forks: totalForks,
-    createdAt: user.created_at,
-    avatar: user.avatar_url,
-    topLanguages: languages,
-  });
 }
